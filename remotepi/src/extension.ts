@@ -13,10 +13,15 @@ export function activate(context: vscode.ExtensionContext) {
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('remotepi.helloWorld', () => {
+	let disposable = vscode.commands.registerCommand('remotepi.build3b+', () => {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from remotePi!');
+		vscode.window.showErrorMessage("Nothing was built for the 3b_, I'm a fraud");
+	});
+
+	vscode.commands.registerCommand('remotepi.build4', () => {
+		vscode.window.showErrorMessage("The build4 command is current not implemented");
+	
 	});
 
 	context.subscriptions.push(disposable);

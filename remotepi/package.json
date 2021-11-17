@@ -10,14 +10,20 @@
 		"Other"
 	],
 	"activationEvents": [
-        "onCommand:remotepi.helloWorld"
+        "onCommand:remotepi.build3b+",
+		"onCommand:remotepi.build4"
+
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
-				"command": "remotepi.helloWorld",
-				"title": "Hello World"
+				"command": "remotepi.build3b+",
+				"title": "Build Pi 3b+"
+			},
+			{
+				"command": "remotepi.build4",
+				"title": "Build Pi 4"
 			}
 		]
 	},
