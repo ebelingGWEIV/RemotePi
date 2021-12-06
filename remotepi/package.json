@@ -10,32 +10,27 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:remotepi.build3b+",
-    "onCommand:remotepi.build4",
-    "onCommand:remotepi.connectssh",
-    "onCommand:remotepi.setupNewRemote"
+    "onCommand:remotepi.runOnRemote",
+    "onCommand:remotepi.setupNewRemote",
+    "onCommand:remotepi.configureCMake"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
+      
       {
-        "command": "remotepi.build3b+",
-        "title": "Build Pi 3b+",
-        "category": "RPi"
-      },
-      {
-        "command": "remotepi.build4",
-        "title": "Build Pi 4",
-        "category": "RPi"
-      },
-      {
-        "command": "remotepi.connectssh",
-        "title": "Connect to remote device",
+        "command": "remotepi.runOnRemote",
+        "title": "Run last build on remote",
         "category": "RPi"
       },
       {
         "command": "remotepi.setupNewRemote",
         "title": "Add a new remote device",
+        "category": "RPi"
+      },
+      {
+        "command": "remotepi.configureCMake",
+        "title": "Configure CMake to cross compile",
         "category": "RPi"
       }
     ]
@@ -63,6 +58,12 @@
     "typescript": "^4.4.4"
   },
   "dependencies": {
-    "ssh2": "^1.5.0"
-  }
+    "ssh2": "^1.5.0",
+    "openssh-client": "^"
+  },
+  "extensionDependencies": [
+    "twxs.CMake",
+    "ms-vscode.cmake-tools",
+    "ms-vscode-remote.remote-ssh"
+  ]
 }
