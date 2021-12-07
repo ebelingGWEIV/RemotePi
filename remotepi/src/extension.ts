@@ -10,16 +10,15 @@ import { getVSCodeDownloadUrl } from '@vscode/test-electron/out/util';
 import { fstat } from 'fs';
 
 //This that should be settings somewhere
-let termi : Terminal;
 //#todo add support for multiple remote devicdees
-const homedir = require('os').homedir();
-const remoteRunDir = "~/remotePi/";
+const homedir = require('os').homedir(); //This would be /home/usr/ on linux
+const remoteRunDir = "~/remotePi/"; //Where build files are sent to on the pi
 
-interface remoteInfo {
-	Host: string;
-	HostName?: string;
-	User?: string;
-	Port?: string;
+interface RemoteInfo {
+	host: string;
+	hostName?: string;
+	user?: string;
+	port?: string;
 }
 
 // this method is called when your extension is activated
@@ -50,21 +49,15 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	//This is for opening a ssh connection for the user to use. Should not be used for scp
-	vscode.commands.registerCommand('remotepi.runOnRemote', () => {
+	vscode.commands.registerCommand('remotepi.runOnRemote', async () => {
 		// vscode.commands.executeCommand('opensshremotes.addNewSshHost'); //Has he user add a new host to the config file
 		// vscode.commands.executeCommand('opensshremotes.settings'); //opens the settings page
 		// vscode.commands.executeCommand('opensshremotesexplorer.add'); //opens the add a remote menu from Remote-SSH
-		let remoteList : remoteInfo[] = getRemoteList();
-		console.log("first remote host: " + remoteList[0].Host);
-		let hostname = (vscode.window.showInputBox({
-			ignoreFocusOut : true,
-			prompt : 'Select SSH Remote',
-			placeHolder: 'Example : ssh pi@192.168.1.39',
-			value: remoteList[0].Host,
-			valueSelection: [0, remoteList[0].Host.length] 
-		})) as unknown as string;
+		let remoteList : RemoteInfo[] = getRemoteList();
+		console.log("first remote host: " + remoteList[0].host);
+		
 
-		let remoteHost = remoteToUse(remoteList, hostname);
+		const remoteHost = await remoteToUse(remoteList);
 
 		let binaryPath = buildExists();
 		if(binaryPath.length === 0)
@@ -113,11 +106,11 @@ var findCommand = function(){
 };
 
 // Read the information about remote devices added to the ssh config file
-let getRemoteList = function(): remoteInfo[] {
+function getRemoteList(): RemoteInfo[] {
 	
 	const fs = require('fs');
 	const path = require('path');
-	let remoteList : remoteInfo[] = [];
+	let remoteList : RemoteInfo[] = [];
 
 	let configPath = path.join(homedir, '.ssh', 'config');
 	console.log('path to config: ' + configPath);
@@ -131,32 +124,32 @@ let getRemoteList = function(): remoteInfo[] {
 		for(let i = 0; i < splitRemotes.length; i++)
 		{
 			let element = splitRemotes[i];
-			let remote : remoteInfo;
+			let remote : RemoteInfo;
 	
 			switch(element){
 				case 'Host':
 					remoteNum++;
 					// Create a new remote
-					remote = { Host: ''};
-					remote.Host = splitRemotes[i+1];
+					remote = { host: ''};
+					remote.host = splitRemotes[i+1];
 					// Add it to the list
 					remoteList.push(remote);
 					break;
 				case 'HostName':
 					remote = remoteList[remoteNum]; // Get the last remote
-					remote.HostName = splitRemotes[i+1]; // Update HostName
+					remote.hostName = splitRemotes[i+1]; // Update HostName
 					console.log("Current remote: " + remote);
 					break;
 				case 'User':
 					remote = remoteList[remoteNum];
-					remote.User = splitRemotes[i+1]; // Update User
+					remote.user = splitRemotes[i+1]; // Update User
 					console.log("Current remote: " + remote);
 					break;
 				case 'Port':
 					remote = remoteList[remoteNum];
-					remote.Port = splitRemotes[i+1]; // Update Port
+					remote.port = splitRemotes[i+1]; // Update Port
 					console.log("Current remote: " + remote);
-					vscode.window.showWarningMessage("Port declared for host " + remote.Host + "but ports are not supported by remotePi");
+					vscode.window.showWarningMessage("Port declared for host " + remote.host + "but ports are not supported by remotePi");
 					break;
 				default:
 					console.log("invalid read from ssh/config: " + element);
@@ -172,11 +165,22 @@ let getRemoteList = function(): remoteInfo[] {
 	return remoteList;
 };
 
-let remoteToUse = function(remoteList: remoteInfo[], hostname: string) : remoteInfo {
-	let retr : remoteInfo = {Host: ""}; //create a returable with empty host
+async function remoteToUse(remoteList: RemoteInfo[]) : Promise<RemoteInfo> {
+
+	let host = await (vscode.window.showInputBox({
+		ignoreFocusOut : true,
+		prompt : 'Select SSH Remote',
+		placeHolder: 'Example : ssh pi@192.168.1.39',
+		value: remoteList[0].host,
+		valueSelection: [0, remoteList[0].host.length] 
+	})) as unknown as string;
+
+	console.log("host value: " + host);
+
+	let retr : RemoteInfo = {host: ""}; //create a returable with empty host
 
 	remoteList.forEach(element => {
-		if(element.HostName === hostname){
+		if(element.hostName === host){
 			retr = element;
 		}
 	});
@@ -184,13 +188,13 @@ let remoteToUse = function(remoteList: remoteInfo[], hostname: string) : remoteI
 }
 
 //#todo Verify that a build has occured
-let buildExists = function(): string {
+function buildExists(): string {
 	const fs = require('fs');
-
-	return "";
+	const buildFile = "./build/blink_example";
+	return buildFile;
 };
 
-let runOnRemote = function(remote: remoteInfo, filePath: string): boolean {
+function runOnRemote(remote: RemoteInfo, filePath: string): boolean {
 	const path = require('path');
 	let remotePath = path.join(remoteRunDir, "/", path.basename(filePath));
 
@@ -199,15 +203,24 @@ let runOnRemote = function(remote: remoteInfo, filePath: string): boolean {
 	command = command + " && " + createSCPCommand( remote, filePath); //copy in new file
 	command = command + " && " + createSSHCommand(remote, "sudo " + remotePath); //run new file
 
+	runCommand(command);
+
 	return true;
 };
 
-let createSSHCommand = function(remote: remoteInfo, command: string) : string {
-	return ("ssh " + remote.User + "@" + remote.HostName + " " + command);
+function createSSHCommand(remote: RemoteInfo, command: string) : string {
+	return ("ssh " + remote.user + "@" + remote.hostName + " " + command);
 };
 
-let createSCPCommand = function(remote: remoteInfo, filePath: string) : string {
-	return ("scp " + filePath + " " + remote.User + "@" + remote.HostName + ":" + remoteRunDir);
+function createSCPCommand(remote: RemoteInfo, filePath: string) : string {
+	return ("scp " + filePath + " " + remote.user + "@" + remote.hostName + ":" + remoteRunDir);
+};
+
+function runCommand (command : string) : void {
+	let termi : Terminal = vscode.window.createTerminal();
+	
+	termi.show();
+	termi.sendText(command);
 };
 
 // this method is called when your extension is deactivated
