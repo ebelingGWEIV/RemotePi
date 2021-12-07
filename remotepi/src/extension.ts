@@ -12,7 +12,7 @@ import { fstat } from 'fs';
 //This that should be settings somewhere
 //#todo add support for multiple remote devicdees
 const homedir = require('os').homedir(); //This would be /home/usr/ on linux
-const remoteRunDir = "~/remotePi/"; //Where build files are sent to on the pi
+const remoteRunDir = "/home/pi/remotePi/"; //Where build files are sent to on the pi
 
 interface RemoteInfo {
 	host: string;
@@ -190,17 +190,17 @@ async function remoteToUse(remoteList: RemoteInfo[]) : Promise<RemoteInfo> {
 //#todo Verify that a build has occured
 function buildExists(): string {
 	const fs = require('fs');
-	const buildFile = "./build/blink_example";
+	const buildFile = "build/blink_example";
 	return buildFile;
 };
 
 function runOnRemote(remote: RemoteInfo, filePath: string): boolean {
 	const path = require('path');
-	let remotePath = path.join(remoteRunDir, "/", path.basename(filePath));
+	let remotePath = path.join(remoteRunDir, path.basename(filePath));
 
 	let command = createSSHCommand(remote, "sudo mkdir " + remoteRunDir); //make directory if needed 
-	command = command + " && " + createSSHCommand(remote, "sudo rm " + remotePath); //delete old file
-	command = command + " && " + createSCPCommand( remote, filePath); //copy in new file
+	command = command + "; " + createSSHCommand(remote, "sudo chown " + remote.user + " " + remoteRunDir);
+	command = command + "; " + createSCPCommand( remote, filePath); //copy in new file
 	command = command + " && " + createSSHCommand(remote, "sudo " + remotePath); //run new file
 
 	runCommand(command);
@@ -209,7 +209,7 @@ function runOnRemote(remote: RemoteInfo, filePath: string): boolean {
 };
 
 function createSSHCommand(remote: RemoteInfo, command: string) : string {
-	return ("ssh " + remote.user + "@" + remote.hostName + " " + command);
+	return ("ssh " + remote.user + "@" + remote.hostName + " " + "\"" + command + "\"");
 };
 
 function createSCPCommand(remote: RemoteInfo, filePath: string) : string {
