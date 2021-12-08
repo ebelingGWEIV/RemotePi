@@ -9,9 +9,7 @@ import { ConnectConfig } from 'ssh2';
 import { getVSCodeDownloadUrl } from '@vscode/test-electron/out/util';
 import { fstat } from 'fs';
 
-//This that should be settings somewhere
-//#todo add support for multiple remote devicdees
-const homedir = require('os').homedir(); //This would be /home/usr/ on linux
+const homedir = require('os').homedir(); //This would be /home/user/ on linux
 const remoteRunDir = "/home/pi/remotePi/"; //Where build files are sent to on the pi
 
 interface RemoteInfo {
@@ -50,13 +48,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	//This is for opening a ssh connection for the user to use. Should not be used for scp
 	vscode.commands.registerCommand('remotepi.runOnRemote', async () => {
-		// vscode.commands.executeCommand('opensshremotes.addNewSshHost'); //Has he user add a new host to the config file
-		// vscode.commands.executeCommand('opensshremotes.settings'); //opens the settings page
-		// vscode.commands.executeCommand('opensshremotesexplorer.add'); //opens the add a remote menu from Remote-SSH
 		let remoteList : RemoteInfo[] = getRemoteList();
 		console.log("first remote host: " + remoteList[0].host);
 		
-
 		const remoteHost = await remoteToUse(remoteList);
 
 		let binaryPath = buildExists();
@@ -65,9 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage("No build available to be run on the remote device");
 		}
 
-		runOnRemote(remoteHost, binaryPath);
-
-		
+		runOnRemote(remoteHost, binaryPath);	
 	});
 	
 	vscode.commands.registerCommand('remotepi.configureCMake', () =>{
@@ -196,12 +188,15 @@ function buildExists(): string {
 
 function runOnRemote(remote: RemoteInfo, filePath: string): boolean {
 	const path = require('path');
+
 	let remotePath = path.join(remoteRunDir, path.basename(filePath));
 
-	let command = createSSHCommand(remote, "sudo mkdir " + remoteRunDir); //make directory if needed 
+	let command = createSSHCommand(remote, "sudo mkdir -p " + remoteRunDir); //make directory if needed 
+	command = command + "; " + createSSHCommand(remote, "sudo rm " + remotePath); //delete the old file to stop any current execution
 	command = command + "; " + createSSHCommand(remote, "sudo chown " + remote.user + " " + remoteRunDir);
 	command = command + "; " + createSCPCommand( remote, filePath); //copy in new file
-	command = command + " && " + createSSHCommand(remote, "sudo " + remotePath); //run new file
+	command = command + " && " + createSSHCommand(remote, "echo \"scp complete\"");
+	command = command + " && " + createSSHCommand(remote, remotePath); //run new file
 
 	runCommand(command);
 
@@ -213,7 +208,7 @@ function createSSHCommand(remote: RemoteInfo, command: string) : string {
 };
 
 function createSCPCommand(remote: RemoteInfo, filePath: string) : string {
-	return ("scp " + filePath + " " + remote.user + "@" + remote.hostName + ":" + remoteRunDir);
+	return ("scp -l 8192 " + filePath + " " + remote.user + "@" + remote.hostName + ":" + remoteRunDir);
 };
 
 function runCommand (command : string) : void {
