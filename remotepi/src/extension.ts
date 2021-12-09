@@ -11,6 +11,8 @@ import { fstat } from 'fs';
 
 const homedir = require('os').homedir(); //This would be /home/user/ on linux
 const remoteRunDir = "/home/pi/remotePi/"; //Where build files are sent to on the pi
+let termi : Terminal = vscode.window.createTerminal();
+
 
 interface RemoteInfo {
 	host: string;
@@ -28,6 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
 	let cmake  = vscode.extensions.getExtension('ms-vscode.cmake-tools');
 	let vscssh = vscode.extensions.getExtension('ms-vscode-remote.remote-ssh');
 
+
 	// Activiate the Remote-SSH extension
 	if ( vscssh?.isActive === false) {
 		vscssh.activate().then(
@@ -36,7 +39,19 @@ export function activate(context: vscode.ExtensionContext) {
 				
 			},
 			function() {
-				console.log("Extension activation failed");
+				console.log("remote-ssh activation failed");
+			}
+		);
+	} 
+	// Activiate the CMake-Tools extension
+	if ( cmake?.isActive === false) {
+		cmake.activate().then(
+			function() {
+				console.log( "cmake-tools has been activated ");
+				
+			},
+			function() {
+				console.log("cmake-tools activation failed");
 			}
 		);
 	} 
@@ -62,20 +77,102 @@ export function activate(context: vscode.ExtensionContext) {
 		runOnRemote(remoteHost, binaryPath);	
 	});
 	
-	vscode.commands.registerCommand('remotepi.configureCMake', () =>{
+	/**
+	 * All of the contents of this function are temporary and will only exist until a CMake kit is created to do this properly.
+	 */
+	vscode.commands.registerCommand('remotepi.setupCMake', () =>{
 		//This could maybe happen within a init project command
-		if(cmake)
-		{
-			vscode.window.showInformationMessage("conifguring cmake");
-			
-			//This might be the wrong command, configureArgs could be better
-			vscode.commands.executeCommand("cmake.configureSettings", "-DCMAKE_TOOLCHAIN_FILE=Toolchain-rpi.cmake");
-			vscode.window.showInformationMessage("conifguring complete");
+		const fs = require('fs');
+		const path = vscode.workspace.rootPath + "/CMakeLists.txt";
+		const pathTool = vscode.workspace.rootPath + "/Toolchain-rpi.cmake";
 
+		let found = false;
+		let foundtool = false;
+		// Determine if 
+		try{
+			const data = fs.readFileSync(path);
+			if(data.length > 0){
+				found = true;		
+			}
+			else{
+				vscode.window.showInformationMessage("Did not create new CMakeLists.txt, one already exists.");
+			}
 		}
-		else{
-			vscode.window.showInformationMessage("no cmake found");
+		catch{
 		}
+		try{
+			const moreData = fs.readFileSync(pathTool);
+			if(moreData.length > 0){
+				foundtool = true;
+			}	
+			else
+			{
+				vscode.window.showInformationMessage("Did not create new Toolchain-rpi.cmake, one already exists.");
+
+			}	
+		}
+		catch{}
+
+		if(found === false)
+		{
+			runCommand(`
+			echo "
+			cmake_minimum_required (VERSION 3.0)
+
+			# Name our project
+			project (blink_example)
+
+			# Create a variable that holds the path to our libwiringPi.so file
+			set (WPI_PATH /opt/pi/WiringPi/wiringPi)
+
+			# Add the local ‘include’ directory and the wiringPi directory to grab headers
+			include_directories (include \\\${WPI_PATH})
+
+			message("searching for wiringPi: \\\${WPI_PATH}")
+
+			# Actually find the wiringPi library object
+			find_library(WPI_LIB wiringPi HINTS \\\${WPI_PATH} NO_CMAKE_FIND_ROOT_PATH)
+
+			# Alert the user if we do not find it
+			if(NOT WPI_LIB)
+			message(FATAL_ERROR "wiringPi library not found")
+			endif()
+
+			# Add all the *.c files in our source directory to our executable output
+			FILE(GLOB SRC_FILES src/*.cpp)
+			add_executable(blink_example \\\${SRC_FILES})
+
+			# Link the pre-compiled wiringPi library to the executable we just declared 
+			target_link_libraries(blink_example \\\${WPI_LIB})
+			" > ` + path, false);
+		}
+		if(foundtool === false){
+			runCommand(`
+			echo "
+			# message("starting tool chain")
+			# Define our host system
+			SET(CMAKE_SYSTEM_NAME Linux)
+			SET(CMAKE_SYSTEM_VERSION 1)
+
+			# Define the cross compiler locations
+			SET(CMAKE_C_COMPILER   /opt/pi/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc)
+			SET(CMAKE_CXX_COMPILER /opt/pi/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-g++) #was gcc
+			# Define the sysroot path for the RaspberryPi distribution in our tools folder 
+
+			SET(CMAKE_FIND_ROOT_PATH /opt/pi/tools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/arm-linux-gnueabihf/sysroot/)
+			# Use our definitions for compiler tools
+
+			SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+
+			# Search for libraries and headers in the target directories only
+			SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+			SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+			add_definitions(-Wall)
+			# message("finished tool chain")
+			" > ` + pathTool, false);
+		}
+		
 	});
 
 	context.subscriptions.push(disposable);
@@ -198,7 +295,7 @@ function runOnRemote(remote: RemoteInfo, filePath: string): boolean {
 	command = command + " && " + createSSHCommand(remote, "echo \"scp complete\"");
 	command = command + " && " + createSSHCommand(remote, remotePath); //run new file
 
-	runCommand(command);
+	runCommand(command, true);
 
 	return true;
 };
@@ -211,12 +308,16 @@ function createSCPCommand(remote: RemoteInfo, filePath: string) : string {
 	return ("scp -l 8192 " + filePath + " " + remote.user + "@" + remote.hostName + ":" + remoteRunDir);
 };
 
-function runCommand (command : string) : void {
-	let termi : Terminal = vscode.window.createTerminal();
-	
-	termi.show();
+function runCommand (command : string, show?: boolean) : void {
+	if(show === true) {
+		termi.show();
+	}
+	else{
+		termi.hide();
+	}
 	termi.sendText(command);
 };
+
 
 // this method is called when your extension is deactivated
 export function deactivate() {

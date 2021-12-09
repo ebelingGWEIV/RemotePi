@@ -12,7 +12,7 @@
   "activationEvents": [
     "onCommand:remotepi.runOnRemote",
     "onCommand:remotepi.setupNewRemote",
-    "onCommand:remotepi.configureCMake"
+    "onCommand:remotepi.setupCMake"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -29,8 +29,8 @@
         "category": "RPi"
       },
       {
-        "command": "remotepi.configureCMake",
-        "title": "Configure CMake to cross compile",
+        "command": "remotepi.setupCMake",
+        "title": "Setup CMake to cross compile",
         "category": "RPi"
       }
     ]
